@@ -58,9 +58,13 @@ jobs:
       - name: Collect artifacts
         run: |
           mkdir -p artifacts
-          find gki-builder -type f \( -name Image -o -name Image.gz -o -name '*AnyKernel3*.zip' -o -name '*boot*.img' \) \
-            ! -path '*/.git/*' -print -exec cp -v {} artifacts/ \;
-          ls -lah artifacts || true
+          cp -v /tmp/gki-build/android14-6.1-138/Image artifacts/ 2>/dev/null || true
+          cp -v /tmp/gki-build/android14-6.1-138/Image.gz artifacts/ 2>/dev/null || true
+          cp -v /tmp/gki-build/android14-6.1.138-2025-06-AnyKernel3.zip artifacts/ 2>/dev/null || true
+          cp -v /tmp/gki-build/android14-6.1-138/android14-6.1.138-2025-06-boot*.img artifacts/ 2>/dev/null || true
+          find /tmp/gki-build -maxdepth 3 -type f \( -name 'Image' -o -name 'Image.gz' -o -name '*AnyKernel3*.zip' -o -name 'android14-6.1.138*.img' \) -print
+          ls -lah artifacts
+          test -n "$(ls -A artifacts)"
 
       - name: Upload
         uses: actions/upload-artifact@v4
