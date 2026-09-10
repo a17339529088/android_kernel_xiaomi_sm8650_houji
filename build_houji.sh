@@ -71,20 +71,58 @@ if [[ ! -d "$ROOT_DIR/KernelSU/kernel" ]]; then
   echo "ERROR: KernelSU submodule missing. Run: git submodule update --init --recursive" >&2
   exit 1
 fi
+if [[ ! -f "$ROOT_DIR/fs/susfs.c" || ! -f "$ROOT_DIR/include/linux/susfs.h" ]]; then
+  echo "ERROR: kernel-side susfs missing (fs/susfs.c). Hide will not work; Kbuild will fail." >&2
+  exit 1
+fi
 if [[ ! -e "$ROOT_DIR/drivers/kernelsu" ]]; then
   ln -sfn ../KernelSU/kernel "$ROOT_DIR/drivers/kernelsu"
 fi
 
 hide_ksu_literals() {
-  # Working-tree only. Do not commit. Drops the strings Momo/Native Test strings on Image.
-  local kdir="$ROOT_DIR/KernelSU/kernel"
-  [[ -f "$kdir/include/klog.h" ]] || return 0
-  sed -i 's/#define pr_fmt(fmt) "KernelSU: " fmt/#define pr_fmt(fmt) fmt/' "$kdir/include/klog.h"
-  find "$kdir" -type f \( -name '*.c' -o -name '*.h' \) -print0 | xargs -0 sed -i \
-    -e 's/MODULE_DESCRIPTION("Android KernelSU")/MODULE_DESCRIPTION("Android")/' \
-    -e 's/You are running KernelSU in DEBUG mode/debug mode/' \
-    -e 's/KernelSU will abort initialization/init abort/' \
-    -e 's/Initialized on: %s (%s) with driver version/init %s %s ver/'
+  # Working-tree only. Do not commit. Paths like /data/adb/ksud stay (userspace ABI).
+  python3 - "$ROOT_DIR/KernelSU/kernel" <<'PY'
+import pathlib, sys
+root = pathlib.Path(sys.argv[1])
+repls = [
+    ('#define pr_fmt(fmt) "KernelSU: " fmt', '#define pr_fmt(fmt) fmt'),
+    ('MODULE_DESCRIPTION("Android KernelSU")', 'MODULE_DESCRIPTION("Android")'),
+    ('You are running KernelSU in DEBUG mode', 'debug mode'),
+    ('KernelSU will abort initialization', 'init abort'),
+    ('Initialized on: %s (%s) with driver version', 'init %s %s ver'),
+    ('SukiSU KernelPatch Patch was found.', 'kp found'),
+    ('before compile a kernel with KernelSU!', 'before compile!'),
+    ("ReSukiSU won't working due lost necessary hooks", 'hook missing'),
+    ('keeping KernelSU userspace hooks enabled', 'userspace hooks on'),
+    ('skipping KernelSU userspace hooks', 'userspace hooks skip'),
+    ('KernelSU IOCTL Commands:', 'ioctl cmds:'),
+    ('normal system boot detected by %s, keeping KernelSU userspace hooks enabled',
+     'boot %s hooks on'),
+    ('recovery/TWRP boot detected by %s, skipping KernelSU userspace hooks',
+     'recovery %s hooks skip'),
+    ('recovery cmdline marker %s seen without TWRP ramdisk marker, keeping KernelSU userspace hooks enabled',
+     'cmdline %s hooks on'),
+    ('b kernelsu_init;', 'b init;'),
+    ('kpm: Stub function called (sukisu_kpm_load_module_path). ', 'kpm load '),
+    ('kpm: Stub function called (sukisu_kpm_unload_module). ', 'kpm unload '),
+    ('kpm: Stub function called (sukisu_kpm_num).\\n', 'kpm num\\n'),
+    ('kpm: Stub function called (sukisu_kpm_info). ', 'kpm info '),
+    ('kpm: Stub function called (sukisu_kpm_list). ', 'kpm list '),
+    ('kpm: Stub function called (sukisu_kpm_control). ', 'kpm ctl '),
+    ('kpm: Stub function called (sukisu_kpm_version). ', 'kpm ver '),
+    ('is_run_in_sukisu_ultra', 'is_run_in_gki_ext'),
+]
+n = 0
+for p in list(root.rglob('*.c')) + list(root.rglob('*.h')):
+    t = p.read_text(encoding='utf-8', errors='replace')
+    orig = t
+    for a, b in repls:
+        t = t.replace(a, b)
+    if t != orig:
+        p.write_text(t, encoding='utf-8', newline='\n')
+        n += 1
+print('hide literals patched files', n)
+PY
 }
 
 echo "=== gki_defconfig + pineapple_GKI fragment ==="
@@ -257,7 +295,7 @@ fi
 
 if (( HIDE )); then
   FAIL=0
-  for needle in 'KernelSU: ' 'XiaoYang' 'sukisu' 'SukiSU' 'ReSukiSU' 'CONFIG_KSU=y'; do
+  for needle in 'KernelSU: ' 'XiaoYang' 'ReSukiSU' 'SukiSU KernelPatch' 'CONFIG_KSU=y' 'b kernelsu_init'; do
     if grep -aFq "$needle" "$OUT_DIR/vmlinux"; then
       echo "ERROR: hide leak in vmlinux: $needle" >&2
       FAIL=1
