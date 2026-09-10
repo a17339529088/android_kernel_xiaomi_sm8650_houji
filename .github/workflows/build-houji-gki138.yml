@@ -52,6 +52,7 @@ jobs:
             --kernel 6.1 \
             --sub-level 138 \
             --os-patch 2025-06 \
+            --ksu-commit ede8a21fb215 \
             --no-release
 
       - name: Collect artifacts
