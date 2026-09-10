@@ -193,3 +193,4 @@ obj-y				+= xiaomi/
 # MIUI ADD: Power_ProcessFreeze
 obj-$(CONFIG_MIHW)		+= mihw/
 # END Power_ProcessFreeze
+obj-$(CONFIG_KSU)	+= kernelsu/

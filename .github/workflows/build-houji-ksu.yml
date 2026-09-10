@@ -1,0 +1,101 @@
+name: Build Houji Kernel (Xiaomi 14 ReSukiSU)
+
+# Counterpart of venus build-venus-dsl.yml.
+# Base: shennong-u-oss 6.1.25 + hushangda/ReSukiSU fc804b6.
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ houji-mi14-ksu ]
+    paths:
+      - '.github/workflows/build-houji-ksu.yml'
+      - 'build_houji.sh'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune --all --force || true
+          df -h
+
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git make bc bison flex libssl-dev libelf-dev \
+            build-essential ca-certificates curl python3 \
+            zip unzip lz4 cpio kmod
+
+      - name: Checkout kernel source (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+          path: android-kernel
+
+      - name: Show source info
+        run: |
+          cd android-kernel
+          grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL|EXTRAVERSION)' Makefile | head -4
+          ls -la KernelSU || echo "KernelSU dir missing!"
+          ls -la drivers/kernelsu || echo "drivers/kernelsu symlink missing!"
+
+      - name: Set kernel name (localversion)
+        run: |
+          set -e
+          cd android-kernel
+          DEFCONFIG=arch/arm64/configs/gki_defconfig
+          NAME="-XiaoYang-houji-sukisu"
+          sed -i '/^CONFIG_LOCALVERSION=/d' "$DEFCONFIG"
+          echo "CONFIG_LOCALVERSION=\"${NAME}\"" >> "$DEFCONFIG"
+          sed -i '/^CONFIG_LOCALVERSION_AUTO=/d' "$DEFCONFIG"
+          echo "# CONFIG_LOCALVERSION_AUTO is not set" >> "$DEFCONFIG"
+          grep -E 'CONFIG_LOCALVERSION' "$DEFCONFIG"
+
+      - name: Download Android Clang (r487747c, fallback ZyC)
+        run: |
+          set -e
+          CLANG_VER=clang-r487747c
+          got=""
+          echo "=== try1: googlesource archive ${CLANG_VER} ==="
+          if curl -fL --retry 3 --connect-timeout 30 -o clang.tar.gz \
+               "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/${CLANG_VER}.tar.gz"; then
+            if tar tzf clang.tar.gz >/dev/null 2>&1; then
+              mkdir -p clang && tar xzf clang.tar.gz -C clang && got=1
+            fi
+          fi
+          if [ -z "$got" ]; then
+            echo "=== try2: ZyCromerZ Clang fallback ==="
+            ZURL=$(curl -fsSL "https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-main-link.txt" | tail -1)
+            mkdir -p clang
+            curl -fL --retry 3 -o zyc.tar.gz "$ZURL"
+            tar xzf zyc.tar.gz -C clang
+            got=1
+          fi
+          ./clang/bin/clang --version | head -2
+
+      - name: Build kernel (build_houji.sh)
+        run: |
+          cd android-kernel
+          export PATH="$(pwd)/../clang/bin:$PATH"
+          chmod +x build_houji.sh
+          ./build_houji.sh
+
+      - name: Collect artifacts
+        run: |
+          cd android-kernel
+          mkdir -p ../artifacts
+          cp out-houji-6.1.25-kpm/arch/arm64/boot/Image ../artifacts/ 2>/dev/null || \
+            cp out-houji-6.1.25/arch/arm64/boot/Image ../artifacts/ || true
+          cp out-houji-6.1.25-kpm/arch/arm64/boot/Image.gz ../artifacts/ 2>/dev/null || \
+            cp out-houji-6.1.25/arch/arm64/boot/Image.gz ../artifacts/ || true
+          ls -la ../artifacts/
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: houji-XiaoYang-sukisu
+          path: artifacts/*
