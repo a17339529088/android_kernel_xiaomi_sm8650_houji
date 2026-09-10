@@ -1,55 +1,39 @@
 # Xiaomi 14 (houji) ReSukiSU
 
 Device: Xiaomi 14 / 小米14 (`houji`, SM8650 pineapple)
-Kernel: 6.1.25 (`shennong-u-oss`) + ReSukiSU `fc804b6` + susfs4ksu `gki-android14-6.1`
 
-Tags:
-- `houji-mi14-6.1.25` — first wire-up (no in-tree susfs, do not use)
-- `houji-mi14-6.1.25-hide1` — kconfig hide only
-- `houji-mi14-6.1.25-hide2` — **use this**: kernel-side susfs + kallsyms/uname/mount/maps hide
+**实机（2026-09-10）** `23127PN0CC` Android 16：
+`uname -r` = `6.1.138-android14-11-g0c3d559bcd85-ab14529422`
+GKI 枝 = `android14-6.1-2025-06`（SUBLEVEL 138）。**禁刷下面 6.1.25 OSS Image。**
+
+## Tags
+
+| tag | 用途 |
+|---|---|
+| `houji-mi14-6.1.138` | **这台机用这个**：GKI 6.1.138 + ReSukiSU `fc804b6` + susfs |
+| `houji-mi14-6.1.25-hide2` | OSS shennong-u-oss，**对不上这台 6.1.138** |
+| `houji-mi14-6.1.25-hide1` / `houji-mi14-6.1.25` | 冻结，勿刷 |
 
 | phone | repo | tag | kernel |
 |---|---|---|---|
 | 小米11 venus SM8350 | `android_kernel_xiaomi_sm8350_venus` | `venus-mi11-5.4.302` | 5.4.302 |
-| 小米14 houji SM8650 | `android_kernel_xiaomi_sm8650_houji` | `houji-mi14-6.1.25-hide2` | 6.1.25 |
+| 小米14 houji SM8650 | `android_kernel_xiaomi_sm8650_houji` | `houji-mi14-6.1.138` | GKI 6.1.138 |
 
-## Hide2 (kernel)
+## Build（6.1.138 GKI）
 
-In-tree simonpunk susfs (same generation as android14-6.1 GKI):
-- hide ksu/susfs/sukisu/ksud symbols from `/proc/kallsyms`
-- hide sus mounts from mountinfo
-- spoof uname / cmdline / bootconfig
-- hide sus path / kstat / maps / open_redirect
-- SELinux avc / maps umount
-
-Build-time:
-- `/proc/config.gz` exists but `CONFIG_KSU*`/`CONFIG_KPM*` stripped
-- SUSFS klog off, `CONFIG_KSU_DEBUG` off
-- LOCALVERSION empty (no `-sukisu` uname)
-- KernelSU/SukiSU/XiaoYang literals scrubbed; Image scan gates the build
-
-Not renamed (userspace ABI, manager/ksud need them):
-- `/data/adb/ksud`, `/data/adb/ksu/`, `/system/bin/su`
-Those stay hidden from untrusted apps via sus_path + umount, not by renaming.
-
-## Userspace after boot
-
-1. Manager: umount modules for all non-root apps
-2. SUSFS module (`ksu_module_susfs` from susfs4ksu). Spoof uname = stock `uname -r` saved **before** flash
-3. Hide manager APK
-4. Do not enable SUSFS log / KSU debug
-
-## Build
-
-```bash
-git checkout houji-mi14-ksu
-git submodule update --init --recursive
-./build_houji.sh          # HIDE=1
-```
+Actions: **Build Houji GKI 6.1.138** → Run workflow。
+脚本：`gki-138/`。
 
 ## Flash
 
 1. `ro.product.device=houji`
-2. Save stock `uname -r` (must start `6.1.25`)
-3. magiskboot: replace kernel in stock boot.img with `out-houji-6.1.25-kpm/arch/arm64/boot/Image`
-4. `fastboot boot` first, then `flash boot`
+2. 先保存官方 `uname -r`（必须是 `6.1.138-android14-11-...`）给 SUSFS spoof
+3. magiskboot 换 stock boot 的 kernel，或刷 AnyKernel3
+4. `fastboot boot` 先试，再 `flash boot`
+
+## OSS 6.1.25（不要给这台用）
+
+```bash
+git checkout houji-mi14-6.1.25-hide2
+./build_houji.sh
+```
