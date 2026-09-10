@@ -1,4 +1,4 @@
-# Mute SUSFS log + fix 6.1.138 task_mmu Werror after susfs patch.
+# Mute SUSFS log; fix 6.1.138 task_mmu -Werror after ShirkNeko's own fixup.
 from pathlib import Path
 import argparse
 
@@ -13,26 +13,23 @@ def main() -> None:
     if "CONFIG_KSU_SUSFS_ENABLE_LOG=y" not in txt:
         raise SystemExit("ENABLE_LOG line missing")
     txt = txt.replace("CONFIG_KSU_SUSFS_ENABLE_LOG=y", "CONFIG_KSU_SUSFS_ENABLE_LOG=n")
-    old = '''                self._run_cmd(f"patch -p1 --fuzz=3 < {patch_file}", check=False)
-                self._chdir(self.work_dir)
+    old = '''        if "struct dentry *dentry;" in content:
+            content = content.replace("struct dentry *dentry;", "struct dentry *dentry = NULL;")
+            logger.info("已修复 dentry 未初始化问题")
 '''
-    new = '''                self._run_cmd(f"patch -p1 --fuzz=3 < {patch_file}", check=False)
-                # 6.1.138 GKI -Werror: susfs maps hide can leave unused dentry/bypass
-                self._run_cmd(
-                    "sed -i 's/struct dentry \\*dentry;/struct dentry *dentry __maybe_unused;/' fs/proc/task_mmu.c",
-                    check=False,
-                )
-                self._run_cmd(
-                    "sed -i 's/^[[:space:]]*bypass:/\t; \\/* bypass *\\//' fs/proc/task_mmu.c",
-                    check=False,
-                )
-                self._chdir(self.work_dir)
+    new = '''        if "struct dentry *dentry;" in content:
+            content = content.replace("struct dentry *dentry;", "struct dentry *dentry __maybe_unused = NULL;")
+            logger.info("dentry marked __maybe_unused")
+        if "bypass:" in content:
+            import re as _re
+            content = _re.sub(r"^(\\s*)bypass:\\s*$", r"\\1; /* bypass */", content, flags=_re.M)
+            logger.info("removed unused label bypass")
 '''
     if old not in txt:
-        raise SystemExit("apply_susfs patch block not found")
+        raise SystemExit("task_mmu dentry block not found")
     txt = txt.replace(old, new, 1)
     kb.write_text(txt, encoding="utf-8")
-    print("patched ENABLE_LOG=n + task_mmu Werror fixup")
+    print("patched ENABLE_LOG=n + task_mmu unused after sukisu hide patch")
 
 
 if __name__ == "__main__":
