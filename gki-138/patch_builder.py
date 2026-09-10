@@ -1,4 +1,4 @@
-# Mute SUSFS log; fix 6.1.138 task_mmu -Werror after ShirkNeko's own fixup.
+# Mute SUSFS log; 6.1.138 GKI -Werror vs newer susfs maps hide.
 from pathlib import Path
 import argparse
 
@@ -24,12 +24,25 @@ def main() -> None:
             import re as _re
             content = _re.sub(r"^(\\s*)bypass:\\s*$", r"\\1; /* bypass */", content, flags=_re.M)
             logger.info("removed unused label bypass")
+        if "show_vma_header_prefix_fake" in content:
+            content = content.replace(
+                "static void show_vma_header_prefix_fake",
+                "static void __maybe_unused show_vma_header_prefix_fake",
+            )
+            logger.info("marked show_vma_header_prefix_fake unused")
+        proc_mk = Path("fs/proc/Makefile")
+        if proc_mk.exists():
+            mk = proc_mk.read_text(encoding="utf-8", errors="replace")
+            flag = "CFLAGS_task_mmu.o += -Wno-unused-function -Wno-unused-variable -Wno-unused-label\\n"
+            if "CFLAGS_task_mmu.o" not in mk:
+                proc_mk.write_text(mk + "\\n" + flag, encoding="utf-8")
+                logger.info("added CFLAGS_task_mmu.o unused-warn disable")
 '''
     if old not in txt:
         raise SystemExit("task_mmu dentry block not found")
     txt = txt.replace(old, new, 1)
     kb.write_text(txt, encoding="utf-8")
-    print("patched ENABLE_LOG=n + task_mmu unused after sukisu hide patch")
+    print("patched ENABLE_LOG=n + task_mmu unused-function/Makefile")
 
 
 if __name__ == "__main__":
