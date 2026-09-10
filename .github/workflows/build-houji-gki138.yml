@@ -37,7 +37,7 @@ jobs:
           path: gki-builder
           fetch-depth: 1
 
-      - name: Patch builder (ReSukiSU + hide log)
+      - name: Patch builder (SUSFS log off)
         run: |
           python3 gki-138/patch_builder.py --scripts gki-builder/.github/workflows/scripts
 
@@ -52,7 +52,6 @@ jobs:
             --kernel 6.1 \
             --sub-level 138 \
             --os-patch 2025-06 \
-            --ksu-commit fc804b6bc7b18f389dfa3c5a05cb3063aac97db0 \
             --no-release
 
       - name: Collect artifacts
