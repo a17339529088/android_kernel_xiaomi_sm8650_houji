@@ -2,6 +2,7 @@ name: Build Houji Kernel (Xiaomi 14 ReSukiSU)
 
 # Counterpart of venus build-venus-dsl.yml.
 # Base: shennong-u-oss 6.1.25 + hushangda/ReSukiSU fc804b6.
+# Default HIDE=1: no -sukisu LOCALVERSION, sanitized IKCONFIG, muted SUSFS log.
 
 on:
   workflow_dispatch: {}
@@ -43,14 +44,13 @@ jobs:
           ls -la KernelSU || echo "KernelSU dir missing!"
           ls -la drivers/kernelsu || echo "drivers/kernelsu symlink missing!"
 
-      - name: Set kernel name (localversion)
+      - name: Keep stock localversion (no -sukisu stamp)
         run: |
           set -e
           cd android-kernel
           DEFCONFIG=arch/arm64/configs/gki_defconfig
-          NAME="-XiaoYang-houji-sukisu"
           sed -i '/^CONFIG_LOCALVERSION=/d' "$DEFCONFIG"
-          echo "CONFIG_LOCALVERSION=\"${NAME}\"" >> "$DEFCONFIG"
+          echo 'CONFIG_LOCALVERSION=""' >> "$DEFCONFIG"
           sed -i '/^CONFIG_LOCALVERSION_AUTO=/d' "$DEFCONFIG"
           echo "# CONFIG_LOCALVERSION_AUTO is not set" >> "$DEFCONFIG"
           grep -E 'CONFIG_LOCALVERSION' "$DEFCONFIG"
@@ -77,10 +77,11 @@ jobs:
           fi
           ./clang/bin/clang --version | head -2
 
-      - name: Build kernel (build_houji.sh)
+      - name: Build kernel (build_houji.sh HIDE=1)
         run: |
           cd android-kernel
           export PATH="$(pwd)/../clang/bin:$PATH"
+          export HIDE=1
           chmod +x build_houji.sh
           ./build_houji.sh
 
@@ -97,5 +98,5 @@ jobs:
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: houji-XiaoYang-sukisu
+          name: houji-6.1.25-resukisu-hide
           path: artifacts/*
