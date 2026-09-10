@@ -1,0 +1,70 @@
+name: Build Houji GKI 6.1.138
+
+# Real device uname 6.1.138-android14-11-g0c3d559bcd85-ab14529422
+# Google: deprecated/android14-6.1-2025-06 (SUBLEVEL=138)
+# Do NOT use OSS houji-mi14-6.1.25 Image on this phone.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free disk
+        uses: AdityaGarg8/remove-unwanted-software@v5
+        with:
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+          remove-docker-images: "true"
+          remove-large-packages: "true"
+
+      - name: Checkout houji scripts only
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            gki-138
+            .github/workflows/build-houji-gki138.yml
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout ShirkNeko GKI builder
+        uses: actions/checkout@v4
+        with:
+          repository: ShirkNeko/GKI_KernelSU_SUSFS
+          path: gki-builder
+          fetch-depth: 1
+
+      - name: Patch builder (ReSukiSU + hide log)
+        run: |
+          python3 gki-138/patch_builder.py --scripts gki-builder/.github/workflows/scripts
+
+      - name: Install python deps
+        run: pip install PyYAML
+
+      - name: Build android14-6.1.138-2025-06
+        working-directory: gki-builder/.github/workflows/scripts
+        run: |
+          python3 build.py \
+            --android android14 \
+            --kernel 6.1 \
+            --sub-level 138 \
+            --os-patch 2025-06 \
+            --ksu-commit fc804b6bc7b18f389dfa3c5a05cb3063aac97db0 \
+            --no-release
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts
+          find gki-builder -type f \( -name Image -o -name Image.gz -o -name '*AnyKernel3*.zip' -o -name '*boot*.img' \) \
+            ! -path '*/.git/*' -print -exec cp -v {} artifacts/ \;
+          ls -lah artifacts || true
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: houji-gki-6.1.138-2025-06-resukisu
+          path: artifacts/*
+          if-no-files-found: error
